@@ -154,13 +154,17 @@ bad_roles = {
 quarantined_2025_terms = {
     '2024',
     'intern',
-    'internship'
+    'internship',
+    'co-op',
+    'coop',
 }
 
 quarantined_2024_terms = {
     '2025',
     'intern',
     'internship'
+    'co-op',
+    'coop',
 }
 
 class DiscordBot(commands.Bot):
@@ -213,7 +217,7 @@ class DiscordBot(commands.Bot):
         if target_channel is None:
             self.logger.error(f"No channel with ID {channel_id} found.")
         else:
-            if channel_id == int(os.getenv('FT_CHANNEL_ID')):
+            if channel_id == int(os.getenv('FT_CHANNEL_ID')) or channel_id == int(os.getenv('FT_CANADA_CHANNEL_ID')):
                 JobModel = FullTimeJob
                 quarantine_terms = set()
                 channel_name = "Full-Time Jobs"
@@ -223,12 +227,12 @@ class DiscordBot(commands.Bot):
                 quarantine_terms = set()
                 channel_name = "Intern Jobs"
                 required_terms = ["intern"]
-            elif channel_id == int(os.getenv('NG_2025_CHANNEL_ID')):
+            elif channel_id == int(os.getenv('NG_2025_CHANNEL_ID')) or channel_id == int(os.getenv('NG_2025_CANADA_CHANNEL_ID')):
                 JobModel = NG2025Job
                 quarantine_terms = quarantined_2025_terms
                 channel_name = "NG 2025 Jobs"
                 required_terms = ["engineer", "technology", "developer", "software", "new grad", "entry level", "entry"]
-            elif channel_id == int(os.getenv('NG_2024_CHANNEL_ID')):
+            elif channel_id == int(os.getenv('NG_2024_CHANNEL_ID')) or channel_id == int(os.getenv('NG_2024_CANADA_CHANNEL_ID')):
                 JobModel = NG2024Job
                 quarantine_terms = quarantined_2024_terms
                 channel_name = "NG 2024 Jobs"
@@ -280,14 +284,47 @@ class DiscordBot(commands.Bot):
     @tasks.loop(seconds=0)
     async def job_posting_task(self):
         import asyncio
-        await self.full_time_job_task()
+        await self.ng_2025_job_task_canada()
+        await asyncio.sleep(10)
+        await self.ng_2024_job_task_canada()
+        await asyncio.sleep(10)
+        await self.full_time_job_task_canada()
         await asyncio.sleep(10)
         await self.ng_2025_job_task()
         await asyncio.sleep(10)
         await self.ng_2024_job_task()
+        await self.full_time_job_task()
         await asyncio.sleep(10)
-        await self.intern_job_task()
         self.logger.info("Job posting task completed.")
+
+    async def full_time_job_task_canada(self):
+        channel_id = int(os.getenv('FT_CANADA_CHANNEL_ID'))
+        full_time_jobs = await self.get_jobs(search_term="software engineer", location="Canada", results_wanted=20)
+        await self.post_jobs(full_time_jobs, channel_id)
+
+    async def ng_2025_job_task_canada(self):
+        channel_id = int(os.getenv('NG_2025_CANADA_CHANNEL_ID'))
+        ng_2025_search_term = self.ng_2025_search_terms[self.ng_2025_search_index]
+
+        self.logger.info(
+            f"Running NG 2025 job task for channel ID: {channel_id} with search term '{ng_2025_search_term}'")
+        jobs = await self.get_jobs(search_term=ng_2025_search_term, location="Canada", hours_old=10)
+        self.logger.info(f"Found {len(jobs)} jobs for NG 2025 channel using '{ng_2025_search_term}'.")
+
+        await self.post_jobs(jobs, channel_id)
+        self.ng_2025_search_index = (self.ng_2025_search_index + 1) % len(self.ng_2025_search_terms)
+
+    async def ng_2024_job_task_canada(self):
+        channel_id = int(os.getenv('NG_2024_CANADA_CHANNEL_ID'))
+        current_search_term = self.ng_2024_search_terms[self.ng_2024_search_index]
+
+        self.logger.info(
+            f"Running NG 2024 job task for channel ID: {channel_id} with search term '{current_search_term}'")
+        jobs = await self.get_jobs(search_term=current_search_term, location="Canada", hours_old=10)
+        self.logger.info(f"Found {len(jobs)} jobs for NG 2024 channel using '{current_search_term}'.")
+
+        await self.post_jobs(jobs, channel_id)
+        self.ng_2024_search_index = (self.ng_2024_search_index + 1) % len(self.ng_2024_search_terms)
 
     async def full_time_job_task(self):
         channel_id = int(os.getenv('FT_CHANNEL_ID'))
